@@ -1,0 +1,632 @@
+/**
+ * 优化后的校园招聘表格功能
+ * 修复了重置按钮多次AJAX请求的性能问题
+ */
+
+jQuery(document).ready(function($) {
+    // 检查是否在WordPress管理页面，如果是则跳过
+    if (typeof window.pagenow !== 'undefined' || $('body').hasClass('wp-admin')) {
+        return;
+    }
+    
+    // 设置优化版本已加载的标志，防止其他脚本冲突
+    window.crt_optimized_version_loaded = true;
+    
+    // 全局变量
+    var cookie_name = "shuaidi_OC";
+    console.log("Debug: cookie_name = " + cookie_name + " (version 1.0.2)");
+    var is_login = window.crt_user_data ? window.crt_user_data.is_login : false;
+    var vip_type = window.crt_user_data ? window.crt_user_data.vip_type : '';
+    
+    // 进度笔记弹窗相关
+    var $notesModal = $('#crt-notes-modal');
+    var $notesTextarea = $('#crt-notes-modal-textarea');
+    var $notesModalSave = $('#crt-notes-modal-save');
+    var $notesModalCancel = $('#crt-notes-modal-cancel');
+    var activeNotesCompanyId = null;
+    var notesModalEnabled = $notesModal.length > 0;
+    
+    // 防止重复AJAX请求
+    var isAjaxInProgress = false;
+    var requestTimeout = null;
+    var requestCounter = 0; // 调试用：计算AJAX请求次数
+    
+    // 公共Cookie处理函数
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? decodeURIComponent(match[2]) : null;
+    }
+    
+    function setCookie(name, value, days) {
+        var expires = "";
+        if (days) {
+            var date = new Date();
+            date.setTime(date.getTime() + (days * 86400 * 1000));
+            
+            if(value < 1){
+                value = 2;
+            }
+            if(Number.isNaN(value)){
+                value = 2;
+            }
+            if(!Number.isFinite(value)){
+                value = 2;
+            }
+            
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + value + expires + "; path=/";
+    }
+    
+    // 公共权限检查函数 - 分离检查和更新逻辑
+    function checkUserPermission(shouldIncrement) {
+        var flag = '';
+        var cookie_value = 0;
+        
+        if(!getCookie(cookie_name)){
+            cookie_value = shouldIncrement ? 1 : 0;
+        } else {
+            cookie_value = parseInt(getCookie(cookie_name));
+            if (shouldIncrement) {
+                cookie_value = cookie_value + 1;
+            }
+            
+            if(!is_login && cookie_value > 3){
+                flag = 'login';
+            } else if(is_login && vip_type != 'vip' && cookie_value > 10){
+                flag = 'vip';
+            }
+        }
+        
+        // 只有在需要递增时才更新cookie
+        if (shouldIncrement) {
+            setCookie(cookie_name, cookie_value, 60);
+        }
+        
+        return { flag: flag, cookie_value: cookie_value };
+    }
+    
+    // 仅检查权限状态，不递增计数
+    function getCurrentPermissionStatus() {
+        return checkUserPermission(false);
+    }
+    
+    // 检查权限并递增计数
+    function incrementAndCheckPermission() {
+        return checkUserPermission(true);
+    }
+    
+    // 显示权限限制信息
+    function showPermissionMessage(flag) {
+        var message = '';
+        if(flag === 'login'){
+            message = '<tr><td colspan="13"><div class="crt-empty-state"><span>请进行登陆后操作</span><p>点击 <a class="btn btn-dark login-btn" href="#">登录后操作</a></p></div></td></tr>';
+        } else if(flag === 'vip'){
+            message = '<tr><td colspan="13"><div class="crt-empty-state"><span>请开通OC会员，解锁无限投递</span><p>点击 <a style=" color:blue" href="https://www.givemeoc.com/user/vip">前往开通</a></p></div></td></tr>';
+        }
+        
+        if(message) {
+            $('#crt-companies-tbody').html(message);
+            $('#crt-pagination-container').empty();
+            return true;
+        }
+        return false;
+    }
+    
+    // 移除防抖函数，直接使用请求锁机制
+    
+    // 通用AJAX请求函数
+    function performAjaxRequest(data, scrollToTop, shouldIncrementCounter) {
+        if (isAjaxInProgress) {
+            return;
+        }
+        
+        // 所有操作都需要进行权限检查和计数
+        var permission;
+        
+        if (shouldIncrementCounter) {
+            permission = incrementAndCheckPermission();
+        } else {
+            permission = getCurrentPermissionStatus();
+        }
+        
+        // 检查权限限制
+        if(permission.flag) {
+            showPermissionMessage(permission.flag);
+            return;
+        }
+        
+        isAjaxInProgress = true;
+        requestCounter++;
+        
+        // 添加计数器标志到请求数据中
+        data.should_increment_counter = shouldIncrementCounter ? 1 : 0;
+        
+        $.ajax({
+            url: crt_ajax.ajax_url,
+            type: 'POST',
+            data: data,
+            timeout: 30000, // 30秒超时
+            beforeSend: function() {
+                $('#crt-companies-tbody').html('<tr><td colspan="13"><div class="crt-empty-state">正在加载...</div></td></tr>');
+                
+                if (scrollToTop) {
+                    $('html, body').animate({
+                        scrollTop: $('.crt-table-container').offset().top - 50
+                    }, 200);
+                }
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#crt-companies-tbody').html(response.data.html);
+                    $('#crt-pagination-container').html(response.data.pagination);
+                    
+                    if (response.data.count === 0) {
+                        $('#crt-companies-tbody').html('<tr><td colspan="13"><div class="crt-empty-state"><span>未找到匹配的公司</span><p>请尝试调整筛选条件</p></div></td></tr>');
+                    }
+                    
+                } else {
+                    $('#crt-companies-tbody').html('<tr><td colspan="13"><div class="crt-empty-state"><span></span><p>请进行登陆才能使用，如果你没有登陆，点击右上角进行登陆</p></div></td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                var errorMsg = '';
+                if (status === 'timeout') {
+                    errorMsg = '请求超时，请稍后重试';
+                } else if (status === 'error') {
+                    errorMsg = '网络错误，请检查网络连接';
+                }
+                $('#crt-companies-tbody').html('<tr><td colspan="13"><div class="crt-empty-state"><span>' + '</span><p>请进行登陆/升级会员继续使用,如果你没有登陆，点击右上角进行登陆</p></div></td></tr>');
+            },
+            complete: function() {
+                isAjaxInProgress = false;
+            }
+        });
+    }
+    
+    // 移除所有可能冲突的事件监听器
+    $('#crt-filter-form').off('submit');
+    $('#crt-filter-form button[type="reset"]').off('click');
+    $(document).off('click', '.crt-pagination a');
+    $(document).off('click', '.crt-page-go-btn');
+    
+    
+    // 分页跳转功能 - 分页操作现在也需要增加计数器
+    $(document).on('click', '.crt-page-go-btn', function() {
+        const pageInput = $(this).siblings('.crt-page-input');
+        const page = parseInt(pageInput.val());
+        const maxPage = parseInt(pageInput.attr('max'));
+        
+        if (page >= 1 && page <= maxPage) {
+            var data = {
+                action: 'filter_companies',
+                nonce: crt_ajax.nonce,
+                paged: page,
+                ...$("#crt-filter-form").serializeArray().reduce(function(obj, item) {
+                    obj[item.name] = item.value;
+                    return obj;
+                }, {})
+            };
+            performAjaxRequest(data, true, true); // true = 增加计数器
+        } else {
+            alert('请输入有效的页码（1-' + maxPage + '）');
+        }
+    });
+    
+    // 监听回车键
+    $(document).on('keypress', '.crt-page-input', function(e) {
+        if (e.which == 13) {
+            e.preventDefault();
+            $(this).siblings('.crt-page-go-btn').click();
+        }
+    });
+    
+    // 筛选表单提交 - 筛选操作需要增加计数器
+    $('#crt-filter-form').on('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        var data = {
+            action: 'filter_companies',
+            nonce: crt_ajax.nonce,
+            paged: 1,
+            ...$(this).serializeArray().reduce(function(obj, item) {
+                obj[item.name] = item.value;
+                return obj;
+            }, {})
+        };
+        
+        // 直接调用AJAX请求函数，不使用防抖 - true = 增加计数器
+        performAjaxRequest(data, false, true);
+    });
+    
+    // 分页点击事件 - 分页操作现在也需要增加计数器
+    $(document).on('click', '.crt-pagination a', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        const href = $(this).attr('href');
+        const url = new URL(window.location.origin + href);
+        const page = url.searchParams.get('paged') || 1;
+        
+        var data = {
+            action: 'filter_companies',
+            nonce: crt_ajax.nonce,
+            paged: page,
+            ...$("#crt-filter-form").serializeArray().reduce(function(obj, item) {
+                obj[item.name] = item.value;
+                return obj;
+            }, {})
+        };
+        performAjaxRequest(data, true, true); // true = 增加计数器
+    });
+    
+    // 优化重置按钮事件处理 - 重置操作需要增加计数器
+    $('#crt-filter-form button[type="reset"]').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        // 防止重复点击
+        if (isAjaxInProgress) {
+            return;
+        }
+        
+        // 重置表单
+        $('#crt-filter-form')[0].reset();
+        
+        // 直接提交表单
+        var data = {
+            action: 'filter_companies',
+            nonce: crt_ajax.nonce,
+            paged: 1,
+            ...$("#crt-filter-form").serializeArray().reduce(function(obj, item) {
+                obj[item.name] = item.value;
+                return obj;
+            }, {})
+        };
+        
+        // 短暂延迟确保表单重置完成 - true = 增加计数器
+        setTimeout(function() {
+            performAjaxRequest(data, false, true);
+        }, 50);
+    });
+    
+    function formatNotesDisplay(notes, threshold) {
+        if (!notes) {
+            return '暂无笔记';
+        }
+        if (notes.length > threshold) {
+            return notes.substring(0, threshold) + '...';
+        }
+        return notes;
+    }
+    
+    function openNotesModal(companyId, notes) {
+        if (!notesModalEnabled) {
+            var newNotes = window.prompt('编辑笔记', notes || '') || '';
+            saveNotes(companyId, newNotes);
+            return;
+        }
+        
+        activeNotesCompanyId = companyId;
+        $notesTextarea.val(notes || '');
+        $notesModal.addClass('is-open').attr('aria-hidden', 'false');
+        setTimeout(function() {
+            $notesTextarea.focus();
+        }, 50);
+    }
+    
+    function closeNotesModal() {
+        if (!notesModalEnabled) {
+            return;
+        }
+        activeNotesCompanyId = null;
+        $notesModal.removeClass('is-open').attr('aria-hidden', 'true');
+    }
+    
+    function saveNotes(companyId, notes) {
+        if (!companyId) {
+            return;
+        }
+        
+        var $feedback = $('.crt-notes-feedback[data-company-id="' + companyId + '"]');
+        var $text = $('.crt-notes-text[data-company-id="' + companyId + '"]');
+        var $statusSelect = $('.crt-status-select[data-company-id="' + companyId + '"]');
+        var status = $statusSelect.length ? $statusSelect.val() : '已投递';
+        
+        $.ajax({
+            url: crt_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'update_application_status',
+                nonce: crt_ajax.nonce,
+                company_id: companyId,
+                status: status,
+                notes: notes
+            },
+            beforeSend: function() {
+                if (notesModalEnabled) {
+                    $notesModalSave.prop('disabled', true).text('保存中...');
+                }
+                $feedback.text('');
+            },
+            success: function(response) {
+                if (response.success) {
+                    var threshold = parseInt($text.data('truncate-threshold'), 10);
+                    if (isNaN(threshold)) {
+                        threshold = 20;
+                    }
+                    var displayNotes = formatNotesDisplay(notes, threshold);
+                    $text.text(displayNotes);
+                    $text.attr('data-notes', notes);
+                    $text.data('notes', notes);
+                    
+                    if (notes && notes.length > threshold) {
+                        $text.addClass('crt-tooltip-trigger');
+                        $text.attr('data-tooltip', notes);
+                    } else {
+                        $text.removeClass('crt-tooltip-trigger');
+                        $text.removeAttr('data-tooltip');
+                    }
+                    $feedback.text('已保存').css('color', '#10b981');
+                    
+                    if (response.data && response.data.updated_at) {
+                        var dateOnly = response.data.updated_at.substring(0, 10);
+                        $('.crt-modified-time[data-company-id="' + companyId + '"]').text(dateOnly);
+                    }
+                    
+                    if (notesModalEnabled) {
+                        closeNotesModal();
+                    }
+                } else {
+                    $feedback.text(response.data && response.data.message ? response.data.message : '保存失败').css('color', '#ef4444');
+                }
+            },
+            error: function() {
+                $feedback.text('网络错误，请稍后重试').css('color', '#ef4444');
+            },
+            complete: function() {
+                if (notesModalEnabled) {
+                    $notesModalSave.prop('disabled', false).text('保存');
+                }
+            }
+        });
+    }
+    
+    $(document).on('click', '.crt-notes-edit', function() {
+        var companyId = $(this).data('company-id');
+        var $text = $('.crt-notes-text[data-company-id="' + companyId + '"]');
+        var existingNotes = $text.data('notes') || $text.attr('data-notes') || '';
+        openNotesModal(companyId, existingNotes);
+    });
+    
+    if (notesModalEnabled) {
+        $notesModalSave.on('click', function() {
+            if (!activeNotesCompanyId) {
+                return;
+            }
+            var notes = $notesTextarea.val() || '';
+            saveNotes(activeNotesCompanyId, notes);
+        });
+        
+        $notesModalCancel.on('click', function() {
+            closeNotesModal();
+        });
+        
+        $notesModal.on('click', '.crt-notes-modal-overlay', function() {
+            closeNotesModal();
+        });
+        
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && $notesModal.hasClass('is-open')) {
+                closeNotesModal();
+            }
+        });
+    }
+    
+    // 更新申请状态
+    $(document).on('change', '.crt-status-select', function() {
+        var companyId = $(this).data('company-id');
+        var status = $(this).val();
+        var statusSelect = $(this);
+        var originalStatus = statusSelect.data('original-status');
+        
+        $.ajax({
+            url: crt_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'update_application_status',
+                nonce: crt_ajax.nonce,
+                company_id: companyId,
+                status: status
+            },
+            beforeSend: function() {
+                statusSelect.prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success) {
+                    statusSelect.data('original-status', status);
+                    
+                    if (response.data && response.data.updated_at) {
+                        var updatedDate = response.data.updated_at.substring(0, 10);
+                        $('.crt-modified-time[data-company-id="' + companyId + '"]').text(updatedDate);
+                    }
+                    
+                    // 显示通知
+                    var notification = $('<div class="crt-notification crt-success">' + response.data.message + '</div>');
+                    $('body').append(notification);
+                    
+                    setTimeout(function() {
+                        notification.fadeOut(400, function() {
+                            $(this).remove();
+                        });
+                    }, 2000);
+                    
+                    // 如果当前正在使用状态过滤器，刷新列表
+                    var currentStatusFilter = $('#crt-progress-status').val();
+                    if (currentStatusFilter && currentStatusFilter !== '') {
+                        setTimeout(function() {
+                            $('#crt-filter-form').submit();
+                        }, 500);
+                    }
+                } else {
+                    // 显示错误并还原状态
+                    var notification = $('<div class="crt-notification crt-error">' + (response.data.message || '更新失败') + '</div>');
+                    $('body').append(notification);
+                    
+                    setTimeout(function() {
+                        notification.fadeOut(400, function() {
+                            $(this).remove();
+                        });
+                    }, 2000);
+                    
+                    statusSelect.val(originalStatus);
+                }
+            },
+            error: function() {
+                // 显示错误并还原状态
+                var notification = $('<div class="crt-notification crt-error">网络错误，请稍后再试</div>');
+                $('body').append(notification);
+                
+                setTimeout(function() {
+                    notification.fadeOut(400, function() {
+                        $(this).remove();
+                    });
+                }, 2000);
+                
+                statusSelect.val(originalStatus);
+            },
+            complete: function() {
+                statusSelect.prop('disabled', false);
+            }
+        });
+    });
+    
+    // 初始化状态选择器的颜色
+    function updateStatusSelectColor($select) {
+        var val = $select.val();
+        $select
+            .removeClass('crt-status-未投递 crt-status-已投递 crt-status-已笔试 crt-status-已面试 crt-status-面试通过 crt-status-暂不投递')
+            .addClass('crt-status-' + val);
+    }
+
+    $(document).on('change', '.crt-status-select', function() {
+        updateStatusSelectColor($(this));
+    });
+
+    // 页面初始时设置状态选择器颜色
+    $('.crt-status-select').each(function() {
+        updateStatusSelectColor($(this));
+        $(this).data('original-status', $(this).val());
+    });
+    
+    // 工具提示（避免重复初始化）
+    if (!window.crtTooltipInitialized) {
+        window.crtTooltipInitialized = true;
+        $(document).on('mouseenter', '.crt-tooltip-trigger', function() {
+            $('.crt-tooltip').remove();
+            var tooltipContent = $(this).data('tooltip') || '';
+            tooltipContent = tooltipContent.toString().replace(/\n/g, '<br>');
+            var tooltip = $('<div class="crt-tooltip">' + tooltipContent + '</div>');
+            $('body').append(tooltip);
+            
+            var triggerPos = $(this).offset();
+            var triggerWidth = $(this).outerWidth();
+            var triggerHeight = $(this).outerHeight();
+            
+            tooltip.css({
+                left: triggerPos.left + triggerWidth / 2 - tooltip.outerWidth() / 2,
+                top: triggerPos.top - tooltip.outerHeight() - 10
+            });
+            
+            $(this).data('tooltip-element', tooltip);
+        }).on('mouseleave', '.crt-tooltip-trigger', function() {
+            var tooltip = $(this).data('tooltip-element');
+            if (tooltip) {
+                tooltip.remove();
+            }
+        });
+    }
+    
+    // 表格行高亮效果
+    $(document).on('mouseenter', '.crt-table tbody tr', function() {
+        $(this).addClass('crt-row-hover');
+    }).on('mouseleave', '.crt-table tbody tr', function() {
+        $(this).removeClass('crt-row-hover');
+    });
+    
+    // 页面初始化完成
+    var initialStatus = getCurrentPermissionStatus();
+    
+    // 测试用：重置计数器函数 (可在浏览器控制台调用 resetCounter())
+    window.resetCounter = function() {
+        setCookie(cookie_name, 0, 60);
+        location.reload();
+    };
+});
+
+// 在线人数显示功能（保持原有逻辑）
+function getOnlineRangeByHour(hour) {
+    if (hour >= 0 && hour < 6) return [50, 150];
+    if (hour >= 7 && hour < 10) return [150, 300];
+    if (hour >= 10 && hour < 22) return [200, 400];
+    if (hour >= 22 && hour < 24) return [200, 300];
+    return [50, 150];
+}
+
+function getOnlineCookie(name) {
+    let match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+}
+
+function setOnlineCookie(name, value, minutes) {
+    let expires = "";
+    if (minutes) {
+        let date = new Date();
+        date.setTime(date.getTime() + (minutes * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + encodeURIComponent(value) + expires + "; path=/";
+}
+
+function getOnlineCount() {
+    const now = new Date();
+    const hour = now.getHours();
+    const [min, max] = getOnlineRangeByHour(hour);
+
+    let lastCount = parseInt(getOnlineCookie('online_count')) || Math.floor(Math.random() * (max - min + 1)) + min;
+    let lastTime = parseInt(getOnlineCookie('online_count_time')) || 0;
+    let nowTime = Math.floor(Date.now() / 1000);
+
+    if (nowTime - lastTime > 300 || isNaN(lastCount)) {
+        let delta = Math.floor(Math.random() * 21) - 10;
+        if (Math.random() < 0.5) delta = -Math.abs(delta); else delta = Math.abs(delta);
+        let newCount = lastCount + delta;
+        if (newCount > max) newCount = max;
+        if (newCount < min) newCount = min;
+        setOnlineCookie('online_count', newCount, 10);
+        setOnlineCookie('online_count_time', nowTime, 10);
+        return newCount;
+    } else {
+        return lastCount;
+    }
+}
+
+function updateOnlineCountDisplay() {
+    let count = getOnlineCount();
+    let infoBox = jQuery('.crt-pagination-info');
+    if (infoBox.find('.crt-online-count').length === 0) {
+        infoBox.append('<span class="crt-online-count" style="margin-left:20px;">当前在线人数：<b>' + count + '</b></span>');
+    } else {
+        infoBox.find('.crt-online-count b').text(count);
+    }
+}
+
+// 页面加载时初始化在线人数显示
+jQuery(function() {
+    updateOnlineCountDisplay();
+    setInterval(updateOnlineCountDisplay, 5 * 60 * 1000);
+});

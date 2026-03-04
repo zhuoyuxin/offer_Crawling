@@ -1,0 +1,21 @@
+fetch("https://www.givemeoc.com/wp-admin/admin-ajax.php", {
+  "headers": {
+    "accept": "*/*",
+    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+    "cache-control": "no-cache",
+    "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "pragma": "no-cache",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"Microsoft Edge\";v=\"145\", \"Chromium\";v=\"145\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "x-requested-with": "XMLHttpRequest",
+    "cookie": "wordpress_sec_ce5e4d2c76be9325f50ac09dcde8fe73=mpweixin_63613156%7C1773668442%7Ci4VTpXXu0mxas4Gb55AC9y41TXSV4qqioy0c1GqRjjw%7C087427fd74fd85f0e80aea2137b80c3099a777ff95fb02cd31e40d6242c45640; Hm_lvt_5c66a1115911457bff837bebe34f9d6e=1772458629; HMACCOUNT=6D61BEBE20B7D9CB; wordpress_logged_in_ce5e4d2c76be9325f50ac09dcde8fe73=mpweixin_63613156%7C1773668442%7Ci4VTpXXu0mxas4Gb55AC9y41TXSV4qqioy0c1GqRjjw%7Cb3971f578c91d8b637b2a75eea8ecabd768f127bc85606f469305291d2ab6881; Hm_lpvt_5c66a1115911457bff837bebe34f9d6e=1772458849; online_count=231; online_count_time=1772460348; shuaidi_OC=8",
+    "Referer": "https://www.givemeoc.com/"
+  },
+  "body": "action=filter_companies&nonce=fdc6947a76&paged=1&company_name=&company_type=&location=&recruitment_type=&target_candidates=&position=&progress_status=&deadline_range=&should_increment_counter=1",
+  "method": "POST"
+});

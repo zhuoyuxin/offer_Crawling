@@ -1,0 +1,39 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 32 58% 96%;
+  --foreground: 28 23% 14%;
+  --muted: 30 24% 92%;
+  --muted-foreground: 26 9% 45%;
+  --border: 30 20% 84%;
+  --input: 30 20% 84%;
+  --ring: 25 83% 54%;
+  --primary: 25 83% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 24 35% 90%;
+  --secondary-foreground: 27 22% 19%;
+  --accent: 36 83% 92%;
+  --accent-foreground: 26 23% 18%;
+  --destructive: 0 73% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --radius: 0.85rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: "Outfit", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "ZCOOL XiaoWei", serif;
+}
