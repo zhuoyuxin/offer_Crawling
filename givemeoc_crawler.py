@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urljoin, urlparse
+from urllib.parse import ParseResult, parse_qsl, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -86,6 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-path", default="data/jobs.db", help="SQLite 文件路径，默认 data/jobs.db")
     parser.add_argument("--recruitment-type", default="春招", help="请求参数 recruitment_type，默认 春招")
     parser.add_argument("--max-pages", type=int, default=None, help="最大抓取页数（可选）")
+    parser.add_argument("--start-page", type=int, default=1, help="start page, default 1")
     parser.add_argument(
         "--sleep-seconds",
         type=float,
@@ -268,19 +269,37 @@ def normalize_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def safe_urlparse(url: str) -> ParseResult | None:
+    try:
+        return urlparse(url)
+    except ValueError:
+        return None
+
+
 def absolute_url(href: str) -> str:
-    return urljoin(BASE_URL, href.strip())
+    candidate = href.strip()
+    if not candidate:
+        return ""
+    try:
+        return urljoin(BASE_URL, candidate)
+    except ValueError:
+        logging.warning("跳过非法链接：%s", candidate)
+        return ""
 
 
 def is_http_url(url: str) -> bool:
-    parsed = urlparse(url)
+    parsed = safe_urlparse(url)
+    if parsed is None:
+        return False
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
 def extract_post_id(url: str) -> str | None:
-    if not is_http_url(url):
+    parsed = safe_urlparse(url)
+    if parsed is None:
         return None
-    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
     query_match = re.search(r"(?:^|&)(?:p|id|post_id|company_id)=(\d+)(?:&|$)", parsed.query)
     if query_match:
         return query_match.group(1)
@@ -368,7 +387,8 @@ def find_detail_anchor(node: Tag) -> Tag | None:
         href = absolute_url(anchor["href"])
         if not is_http_url(href):
             continue
-        if "givemeoc.com" in urlparse(href).netloc:
+        parsed = safe_urlparse(href)
+        if parsed and "givemeoc.com" in parsed.netloc:
             return anchor
     for anchor in anchors:
         href = absolute_url(anchor["href"])
@@ -660,6 +680,7 @@ def load_existing_data_ids(conn: sqlite3.Connection) -> set[str]:
 
 def crawl_jobs(
     template: HeadTemplate,
+    start_page: int,
     max_pages: int | None,
     sleep_seconds: float,
     timeout: int,
@@ -687,8 +708,7 @@ def crawl_jobs(
     logging.info("已加载 data_id 快照：%s 条", len(existing_ids_snapshot))
 
     stats = CrawlStats()
-    page = 1
-
+    page = start_page
     while True:
         if max_pages is not None and page > max_pages:
             stats.stop_reason = "max_pages"
@@ -699,8 +719,8 @@ def crawl_jobs(
         raw_response = request_page(session, runtime_template, page, timeout=timeout, retries=retries)
         page_records = parse_page_records(raw_response, page)
         if not page_records:
-            if page == 1:
-                raise RuntimeError("第 1 页未解析到招聘信息，请检查 head.txt 中 cookie 与 nonce 是否已过期")
+            if page == start_page:
+                raise RuntimeError(f"起始页（第 {start_page} 页）未解析到招聘信息，请检查 head.txt 中 cookie/nonce 是否有效")
             stats.stop_reason = "empty_page"
             logging.info("第 %s 页无数据，结束分页抓取", page)
             break
@@ -886,16 +906,22 @@ def main() -> int:
     head_file = Path(args.head_file)
     db_path = Path(args.db_path)
 
+    if args.start_page < 1:
+        raise ValueError("--start-page 必须是大于等于 1 的整数")
     if args.max_pages is not None and args.max_pages < 1:
         raise ValueError("--max-pages 必须是大于等于 1 的整数")
+    if args.max_pages is not None and args.start_page > args.max_pages:
+        raise ValueError("--start-page 不能大于 --max-pages")
 
     template = load_head_template(head_file)
     template.body["recruitment_type"] = args.recruitment_type
     logging.info("请求筛选：recruitment_type=%s", args.recruitment_type)
+    logging.info("抓取范围：start_page=%s, max_pages=%s", args.start_page, args.max_pages if args.max_pages is not None else "不限")
     conn = open_database(db_path)
     try:
         stats = crawl_jobs(
             template=template,
+            start_page=args.start_page,
             max_pages=args.max_pages,
             sleep_seconds=args.sleep_seconds,
             timeout=args.timeout,

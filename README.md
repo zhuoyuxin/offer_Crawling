@@ -29,6 +29,7 @@ python -m pip install -r requirements.txt
 ```bash
 python givemeoc_crawler.py --mode stop_on_existing --db-path data/jobs.db
 python givemeoc_crawler.py --mode update_and_continue --db-path data/jobs.db
+python givemeoc_crawler.py --start-page 5 --max-pages 10 --mode update_and_continue --db-path data/jobs.db
 ```
 
 说明：
@@ -36,11 +37,15 @@ python givemeoc_crawler.py --mode update_and_continue --db-path data/jobs.db
 - 旧模式 `full` / `incremental` 已废弃，传入会报参数错误
 - 入库冲突键为 `data_id`
 - 程序会确保 `jobs(data_id)` 唯一索引存在；若历史数据存在重复 `data_id`，会报错并提示先清理
+- Added `--start-page` to start crawling from a specific page (default: page 1).
+- `--max-pages` keeps absolute page-index semantics: `--start-page 5 --max-pages 10` crawls pages 5-10.
+- If `--start-page > --max-pages`, the crawler exits with a parameter validation error.
 
 常用参数：
 
 - `--head-file head.txt`
 - `--recruitment-type 春招`
+- `--start-page 1`
 - `--max-pages 50`
 - `--sleep-seconds 0.8`
 - `--timeout 20`
