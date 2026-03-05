@@ -1,3 +1,11 @@
+function readPositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
 export const APPLICATION_STATUSES = [
   "未投递",
   "已投递",
@@ -11,6 +19,49 @@ export const APPLICATION_STATUSES = [
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
+export const USER_ROLES = ["user", "vip", "admin"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const USER_STATUSES = ["active", "disabled"] as const;
+export type UserStatus = (typeof USER_STATUSES)[number];
+
+export const SESSION_REVOKE_REASONS = [
+  "NEW_LOGIN",
+  "LOGOUT",
+  "FINGERPRINT_MISMATCH",
+  "ADMIN_FORCE_LOGOUT",
+  "EXPIRED",
+] as const;
+export type SessionRevokeReason = (typeof SESSION_REVOKE_REASONS)[number];
+
+export const ERROR_CODES = {
+  UNAUTHORIZED: "UNAUTHORIZED",
+  SESSION_EXPIRED: "SESSION_EXPIRED",
+  SESSION_REVOKED: "SESSION_REVOKED",
+  FINGERPRINT_MISMATCH: "FINGERPRINT_MISMATCH",
+  FORBIDDEN: "FORBIDDEN",
+  APP_LIMIT_REACHED: "APP_LIMIT_REACHED",
+  EMAIL_EXISTS: "EMAIL_EXISTS",
+  BAD_REQUEST: "BAD_REQUEST",
+  NOT_FOUND: "NOT_FOUND",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+} as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
+
+export const DEFAULT_SESSION_TTL_SECONDS = 10_800;
+export const SESSION_TTL_SECONDS = readPositiveInt(
+  process.env.SESSION_TTL_SECONDS,
+  DEFAULT_SESSION_TTL_SECONDS
+);
+
+export const MAX_USER_APPLICATIONS = 30;
+export const MAX_USER_JOB_RESULTS = 10;
+
+export const BCRYPT_ROUNDS = readPositiveInt(process.env.BCRYPT_ROUNDS, 12);
+export const TOKEN_PEPPER = (process.env.TOKEN_PEPPER ?? "dev-token-pepper").trim();
+export const FINGERPRINT_PEPPER = (process.env.FINGERPRINT_PEPPER ?? "dev-fingerprint-pepper").trim();

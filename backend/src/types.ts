@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from "./constants";
+import type { ApplicationStatus, ErrorCode, UserRole, UserStatus } from "./constants";
 
 export interface JobListItem {
   postId: string;
@@ -42,4 +42,40 @@ export interface PaginatedResponse<T> {
   pageSize: number;
   total: number;
   totalPages: number;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+}
+
+export interface SessionPayload {
+  sessionId: number;
+  tokenHash: string;
+  fingerprintHash: string;
+  expiresAt: string;
+  user: AuthUser;
+}
+
+export interface ApiError {
+  code: ErrorCode;
+  message: string;
+}
+
+export interface PublicUser {
+  id: number;
+  email: string;
+  role: UserRole;
+}
+
+export interface AdminUserListItem {
+  id: number;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
 }

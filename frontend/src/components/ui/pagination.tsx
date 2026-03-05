@@ -15,12 +15,7 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
       <span className="min-w-24 text-center text-sm text-muted-foreground">
         第 {page} / {totalPages} 页
       </span>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={page >= totalPages}
-        onClick={() => onChange(page + 1)}
-      >
+      <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
         下一页
       </Button>
     </div>

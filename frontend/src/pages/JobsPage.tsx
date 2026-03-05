@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { applyJob, fetchJobs, getStatusColor } from "@/api/client";
+import { useAuth } from "@/auth/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { STATUS_OPTIONS, type JobListItem, type PaginatedResponse } from "@/types";
 import { cn } from "@/lib/utils";
+import { STATUS_OPTIONS, type JobListItem, type PaginatedResponse } from "@/types";
 
 const PAGE_SIZE = 20;
 const FILTER_OPTIONS = ["全部", ...STATUS_OPTIONS] as const;
 
 export function JobsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isNormalUser = user?.role === "user";
+
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<(typeof FILTER_OPTIONS)[number]>("全部");
   const [page, setPage] = useState(1);
@@ -38,15 +42,18 @@ export function JobsPage() {
         const data = await fetchJobs({
           q,
           status,
-          page,
+          page: isNormalUser ? 1 : page,
           pageSize: PAGE_SIZE,
         });
         if (!cancelled) {
           setResult(data);
+          if (isNormalUser && page !== 1) {
+            setPage(1);
+          }
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载岗位失败");
+          setError(err instanceof Error ? err.message : "加载职位失败");
         }
       } finally {
         if (!cancelled) {
@@ -54,11 +61,11 @@ export function JobsPage() {
         }
       }
     }
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
-  }, [q, status, page]);
+  }, [q, status, page, isNormalUser]);
 
   async function handleApply(item: JobListItem) {
     setActionPostId(item.postId);
@@ -111,9 +118,12 @@ export function JobsPage() {
         </div>
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-[#1f1a15]">岗位信息</h2>
-        <span className="text-sm text-muted-foreground">共 {result.total} 条</span>
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold text-[#1f1a15]">职位信息</h2>
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">共 {result.total} 条</p>
+          {isNormalUser ? <p className="text-xs text-amber-700">普通用户仅显示符合筛选条件的最新 10 条</p> : null}
+        </div>
       </div>
 
       {error ? <p className="mb-3 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
@@ -140,7 +150,7 @@ export function JobsPage() {
           {!loading && result.items.length === 0 ? (
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground">
-                暂无岗位数据
+                暂无职位数据
               </TableCell>
             </TableRow>
           ) : null}
@@ -177,7 +187,7 @@ export function JobsPage() {
                       disabled={actionPostId === item.postId}
                       onClick={() => void handleApply(item)}
                     >
-                      {actionPostId === item.postId ? "处理中..." : item.applicationId ? "查看记录" : "投递"}
+                      {actionPostId === item.postId ? "处理中..." : item.applicationId ? "查看记录" : "一键投递"}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -186,7 +196,7 @@ export function JobsPage() {
         </TableBody>
       </Table>
 
-      <Pagination page={result.page} totalPages={result.totalPages} onChange={setPage} />
+      {!isNormalUser ? <Pagination page={result.page} totalPages={result.totalPages} onChange={setPage} /> : null}
     </section>
   );
 }

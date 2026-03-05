@@ -1,10 +1,36 @@
+import { getVisitorId } from "@/lib/fingerprint";
 import type {
+  AdminUserListItem,
+  ApiErrorShape,
   ApplicationPayload,
   ApplicationRecord,
+  AuthUser,
   JobListItem,
+  LoginPayload,
+  LoginResponse,
   PaginatedResponse,
+  RegisterPayload,
   StatusType,
+  UserRole,
 } from "@/types";
+
+type TokenProvider = () => string | null;
+
+let tokenProvider: TokenProvider = () => null;
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setAuthTokenProvider(provider: TokenProvider | null): void {
+  tokenProvider = provider ?? (() => null);
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
+}
+
+interface RequestOptions extends RequestInit {
+  skipAuth?: boolean;
+  preventAutoLogout?: boolean;
+}
 
 function buildQuery(input: Record<string, string | number | undefined | null>) {
   const query = new URLSearchParams();
@@ -18,29 +44,74 @@ function buildQuery(input: Record<string, string | number | undefined | null>) {
   return output ? `?${output}` : "";
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+async function parseError(response: Response): Promise<ApiErrorShape> {
+  try {
+    const parsed = (await response.json()) as Partial<ApiErrorShape>;
+    return {
+      code: parsed.code ?? "UNKNOWN_ERROR",
+      message: parsed.message ?? `请求失败（${response.status}）`,
+    };
+  } catch {
+    return {
+      code: "UNKNOWN_ERROR",
+      message: `请求失败（${response.status}）`,
+    };
+  }
+}
+
+async function request<T>(url: string, options?: RequestOptions): Promise<T> {
+  const headers = new Headers(options?.headers ?? {});
+  const token = options?.skipAuth ? null : tokenProvider();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  headers.set("X-Device-Fingerprint", await getVisitorId());
+  if (options?.body && !headers.has("Content-Type") && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    ...options,
+    headers,
   });
 
   if (!response.ok) {
-    let message = `请求失败：${response.status}`;
-    try {
-      const parsed = (await response.json()) as { message?: string };
-      if (parsed?.message) {
-        message = parsed.message;
-      }
-    } catch {
-      // ignore
+    if (response.status === 401 && token && !options?.preventAutoLogout) {
+      unauthorizedHandler?.();
     }
-    throw new Error(message);
+    const error = await parseError(response);
+    const thrown = new Error(error.message);
+    (thrown as Error & { code?: string }).code = error.code;
+    throw thrown;
   }
 
   return (await response.json()) as T;
+}
+
+export async function register(payload: RegisterPayload): Promise<AuthUser> {
+  return request<AuthUser>("/api/auth/register", {
+    method: "POST",
+    skipAuth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function login(payload: LoginPayload): Promise<LoginResponse> {
+  return request<LoginResponse>("/api/auth/login", {
+    method: "POST",
+    skipAuth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function logout(): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
+export async function fetchMe(): Promise<AuthUser> {
+  return request<AuthUser>("/api/auth/me");
 }
 
 export async function fetchJobs(params: {
@@ -85,6 +156,31 @@ export async function updateApplication(id: number, payload: ApplicationPayload)
 export async function deleteApplication(id: number): Promise<{ success: boolean }> {
   return request(`/api/applications/${id}`, {
     method: "DELETE",
+  });
+}
+
+export async function fetchAdminUsers(params: {
+  q?: string;
+  role?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<PaginatedResponse<AdminUserListItem>> {
+  return request(`/api/admin/users${buildQuery(params)}`);
+}
+
+export async function updateAdminUserRole(
+  id: number,
+  role: Extract<UserRole, "user" | "vip">
+): Promise<AdminUserListItem> {
+  return request(`/api/admin/users/${id}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function forceLogoutUser(id: number): Promise<{ success: boolean; revoked: number }> {
+  return request(`/api/admin/users/${id}/force-logout`, {
+    method: "POST",
   });
 }
 

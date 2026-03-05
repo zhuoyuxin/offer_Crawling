@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import {
-  createApplication,
-  deleteApplication,
-  fetchApplications,
-  getStatusColor,
-  updateApplication,
-} from "@/api/client";
+import { createApplication, deleteApplication, fetchApplications, getStatusColor, updateApplication } from "@/api/client";
+import { useAuth } from "@/auth/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +22,7 @@ import { STATUS_OPTIONS, type ApplicationRecord, type StatusType } from "@/types
 
 const PAGE_SIZE = 20;
 const FILTER_OPTIONS = ["全部", ...STATUS_OPTIONS] as const;
+const MAX_USER_APPLICATIONS = 30;
 
 interface FormState {
   postId: string;
@@ -88,6 +84,9 @@ function parseFocusId(search: string): number {
 
 export function ApplicationsPage() {
   const location = useLocation();
+  const { user } = useAuth();
+  const isNormalUser = user?.role === "user";
+
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<(typeof FILTER_OPTIONS)[number]>("全部");
   const [page, setPage] = useState(1);
@@ -104,6 +103,9 @@ export function ApplicationsPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(toFormState());
+
+  const limitReached = isNormalUser && total >= MAX_USER_APPLICATIONS;
+  const dialogTitle = useMemo(() => (editingId ? "编辑投递记录" : "手动新增投递记录"), [editingId]);
 
   useEffect(() => {
     const nextFocus = parseFocusId(location.search);
@@ -152,19 +154,21 @@ export function ApplicationsPage() {
         }
       }
     }
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
   }, [q, status, page, refreshToken, activeFocusId]);
-
-  const dialogTitle = useMemo(() => (editingId ? "编辑投递记录" : "新增投递记录"), [editingId]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function openCreate() {
+    if (limitReached) {
+      setError(`普通用户最多保留 ${MAX_USER_APPLICATIONS} 条投递记录，请先删除后再新增`);
+      return;
+    }
     setEditingId(null);
     setForm(toFormState());
     setDialogOpen(true);
@@ -181,6 +185,11 @@ export function ApplicationsPage() {
       setError("公司、岗位、投递日期为必填项");
       return;
     }
+    if (!editingId && limitReached) {
+      setError(`普通用户最多保留 ${MAX_USER_APPLICATIONS} 条投递记录，请先删除后再新增`);
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -259,12 +268,23 @@ export function ApplicationsPage() {
             ))}
           </Select>
         </div>
-        <Button onClick={openCreate}>手动新增</Button>
+        <Button onClick={openCreate} disabled={limitReached}>
+          手动新增
+        </Button>
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold text-[#1f1a15]">投递记录</h2>
-        <span className="text-sm text-muted-foreground">共 {total} 条</span>
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">共 {total} 条</p>
+          {isNormalUser ? (
+            <p className={cn("text-xs", limitReached ? "text-rose-700" : "text-muted-foreground")}>
+              {limitReached
+                ? `已达到普通用户上限 ${MAX_USER_APPLICATIONS} 条，请删除后继续新增或一键投递`
+                : `普通用户上限 ${MAX_USER_APPLICATIONS} 条`}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {error ? <p className="mb-3 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</p> : null}

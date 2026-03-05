@@ -11,6 +11,19 @@ export const STATUS_OPTIONS = [
 
 export type StatusType = (typeof STATUS_OPTIONS)[number];
 
+export type UserRole = "user" | "vip" | "admin";
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  role: UserRole;
+}
+
+export interface ApiErrorShape {
+  code: string;
+  message: string;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   page: number;
@@ -67,4 +80,27 @@ export interface ApplicationPayload {
   channel?: string;
   contact?: string;
   notes?: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface RegisterPayload extends LoginPayload {}
+
+export interface LoginResponse {
+  accessToken: string;
+  expiresAt: string;
+  user: AuthUser;
+}
+
+export interface AdminUserListItem {
+  id: number;
+  email: string;
+  role: UserRole;
+  status: "active" | "disabled";
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
 }
