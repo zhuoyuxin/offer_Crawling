@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { applyJob, fetchJobs, getStatusColor } from "@/api/client";
+import { applyJob, createApplication, fetchJobs, getStatusColor } from "@/api/client";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,12 @@ import { STATUS_OPTIONS, type JobListItem, type PaginatedResponse } from "@/type
 
 const PAGE_SIZE = 20;
 const FILTER_OPTIONS = ["全部", ...STATUS_OPTIONS] as const;
+const UNAPPLIED_STATUS = STATUS_OPTIONS[0];
+const NOT_SUITABLE_STATUS = STATUS_OPTIONS[6];
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function JobsPage() {
   const navigate = useNavigate();
@@ -24,7 +30,11 @@ export function JobsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [actionPostId, setActionPostId] = useState<string>("");
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [activeAction, setActiveAction] = useState<{
+    postId: string;
+    type: "apply" | "notSuitable" | null;
+  }>({ postId: "", type: null });
   const [result, setResult] = useState<PaginatedResponse<JobListItem>>({
     items: [],
     page: 1,
@@ -46,6 +56,10 @@ export function JobsPage() {
           pageSize: PAGE_SIZE,
         });
         if (!cancelled) {
+          if (!isNormalUser && page > data.totalPages) {
+            setPage(data.totalPages);
+            return;
+          }
           setResult(data);
           if (isNormalUser && page !== 1) {
             setPage(1);
@@ -65,10 +79,10 @@ export function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [q, status, page, isNormalUser]);
+  }, [q, status, page, isNormalUser, refreshToken]);
 
   async function handleApply(item: JobListItem) {
-    setActionPostId(item.postId);
+    setActiveAction({ postId: item.postId, type: "apply" });
     setError("");
     try {
       if (item.applicationId) {
@@ -82,7 +96,32 @@ export function JobsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "投递失败");
     } finally {
-      setActionPostId("");
+      setActiveAction({ postId: "", type: null });
+    }
+  }
+
+  async function handleMarkNotSuitable(item: JobListItem) {
+    if (item.applicationStatus !== UNAPPLIED_STATUS) {
+      return;
+    }
+    setActiveAction({ postId: item.postId, type: "notSuitable" });
+    setError("");
+    try {
+      await createApplication({
+        postId: item.postId,
+        companyName: item.companyName || "未知公司",
+        position: item.position || item.title || "未知岗位",
+        location: item.location || undefined,
+        detailUrl: item.detailUrl || undefined,
+        status: NOT_SUITABLE_STATUS,
+        appliedAt: today(),
+        notes: "已查看，暂不合适",
+      });
+      setRefreshToken((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "标记失败");
+    } finally {
+      setActiveAction({ postId: "", type: null });
     }
   }
 
@@ -136,7 +175,7 @@ export function JobsPage() {
             <TableHead>地点</TableHead>
             <TableHead>更新时间</TableHead>
             <TableHead>状态</TableHead>
-            <TableHead className="w-[190px]">操作</TableHead>
+            <TableHead className="w-[300px]">操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -155,43 +194,61 @@ export function JobsPage() {
             </TableRow>
           ) : null}
           {!loading
-            ? result.items.map((item) => (
-                <TableRow key={item.postId}>
-                  <TableCell className="font-medium">{item.companyName || "-"}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p>{item.position || item.title || "-"}</p>
-                      {item.detailUrl ? (
-                        <a
-                          href={item.detailUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-primary hover:underline"
+            ? result.items.map((item) => {
+                const rowBusy = activeAction.postId === item.postId;
+                const canMarkNotSuitable = item.applicationStatus === UNAPPLIED_STATUS;
+                return (
+                  <TableRow key={item.postId}>
+                    <TableCell className="font-medium">{item.companyName || "-"}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <p>{item.position || item.title || "-"}</p>
+                        {item.detailUrl ? (
+                          <a
+                            href={item.detailUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            查看原链接
+                          </a>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>{item.location || "-"}</TableCell>
+                    <TableCell>{item.updateTime || "-"}</TableCell>
+                    <TableCell>
+                      <Badge className={cn("border-0", getStatusColor(item.applicationStatus))}>
+                        {item.applicationStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={item.applicationId ? "outline" : "default"}
+                          disabled={rowBusy}
+                          onClick={() => void handleApply(item)}
                         >
-                          查看原链接
-                        </a>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>{item.location || "-"}</TableCell>
-                  <TableCell>{item.updateTime || "-"}</TableCell>
-                  <TableCell>
-                    <Badge className={cn("border-0", getStatusColor(item.applicationStatus))}>
-                      {item.applicationStatus}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant={item.applicationId ? "outline" : "default"}
-                      disabled={actionPostId === item.postId}
-                      onClick={() => void handleApply(item)}
-                    >
-                      {actionPostId === item.postId ? "处理中..." : item.applicationId ? "查看记录" : "一键投递"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+                          {rowBusy && activeAction.type === "apply"
+                            ? "处理中..."
+                            : item.applicationId
+                              ? "查看记录"
+                              : "一键投递"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={rowBusy || !canMarkNotSuitable}
+                          onClick={() => void handleMarkNotSuitable(item)}
+                        >
+                          {rowBusy && activeAction.type === "notSuitable" ? "处理中..." : "已看不合适"}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             : null}
         </TableBody>
       </Table>
