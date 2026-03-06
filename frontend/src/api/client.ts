@@ -1,4 +1,5 @@
 import { getVisitorId } from "@/lib/fingerprint";
+import { loadStoredToken } from "@/auth/storage";
 import type {
   AdminUserListItem,
   ApiErrorShape,
@@ -61,7 +62,7 @@ async function parseError(response: Response): Promise<ApiErrorShape> {
 
 async function request<T>(url: string, options?: RequestOptions): Promise<T> {
   const headers = new Headers(options?.headers ?? {});
-  const token = options?.skipAuth ? null : tokenProvider();
+  const token = options?.skipAuth ? null : tokenProvider() ?? loadStoredToken();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }

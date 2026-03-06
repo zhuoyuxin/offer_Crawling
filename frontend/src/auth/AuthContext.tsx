@@ -31,6 +31,7 @@ export function AuthProvider(props: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const clearSessionState = useCallback(() => {
+    setAuthTokenProvider(null);
     setToken(null);
     setUser(null);
     clearAuthSession();
@@ -87,6 +88,7 @@ export function AuthProvider(props: { children: ReactNode }) {
 
   const login = useCallback(async (payload: LoginPayload) => {
     const result = await loginApi(payload);
+    setAuthTokenProvider(() => result.accessToken);
     setToken(result.accessToken);
     setUser(result.user);
     saveAuthSession(result.accessToken, result.user);
