@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "./auth/password";
 import { generateAccessToken, hashAccessToken } from "./auth/token";
 import {
   APPLICATION_STATUSES,
+  CORS_ORIGINS,
   DEFAULT_PAGE,
   DEFAULT_PAGE_SIZE,
   ERROR_CODES,
@@ -14,6 +15,7 @@ import {
   MAX_USER_JOB_RESULTS,
   SESSION_TTL_SECONDS,
   USER_ROLES,
+  validatePeppers,
   type ApplicationStatus,
   type UserRole,
 } from "./constants";
@@ -21,6 +23,7 @@ import { getDb, initDb } from "./db";
 import { sendError } from "./http";
 import { requireAuth } from "./middleware/auth";
 import { requireRole } from "./middleware/requireRole";
+import { loginLimiter, registerLimiter } from "./middleware/rateLimit";
 import { addSeconds, toSqliteDateTime } from "./time";
 import type {
   AdminUserListItem,
@@ -201,10 +204,15 @@ function assertUserCanCreateApplication(userId: number, role: UserRole): boolean
 }
 
 initDb();
+validatePeppers();
 const db = getDb();
 const app = express();
 
-app.use(cors());
+if (process.env.TRUST_PROXY === "true") {
+  app.set("trust proxy", 1);
+}
+
+app.use(cors({ origin: CORS_ORIGINS, credentials: true }));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
@@ -215,7 +223,7 @@ app.get("/api/statuses", (_req, res) => {
   res.json({ statuses: APPLICATION_STATUSES });
 });
 
-app.post("/api/auth/register", (req, res) => {
+app.post("/api/auth/register", registerLimiter, (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, ERROR_CODES.BAD_REQUEST, parsed.error.issues[0]?.message ?? "参数不合法");
@@ -255,7 +263,7 @@ app.post("/api/auth/register", (req, res) => {
   res.status(201).json(created ? toPublicUser(created) : null);
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", loginLimiter, (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, ERROR_CODES.BAD_REQUEST, parsed.error.issues[0]?.message ?? "参数不合法");

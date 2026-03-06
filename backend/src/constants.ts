@@ -63,5 +63,35 @@ export const MAX_USER_APPLICATIONS = 30;
 export const MAX_USER_JOB_RESULTS = 10;
 
 export const BCRYPT_ROUNDS = readPositiveInt(process.env.BCRYPT_ROUNDS, 12);
-export const TOKEN_PEPPER = (process.env.TOKEN_PEPPER ?? "dev-token-pepper").trim();
-export const FINGERPRINT_PEPPER = (process.env.FINGERPRINT_PEPPER ?? "dev-fingerprint-pepper").trim();
+
+const DEFAULT_TOKEN_PEPPER = "dev-token-pepper";
+const DEFAULT_FINGERPRINT_PEPPER = "dev-fingerprint-pepper";
+export const TOKEN_PEPPER = (process.env.TOKEN_PEPPER ?? DEFAULT_TOKEN_PEPPER).trim();
+export const FINGERPRINT_PEPPER = (process.env.FINGERPRINT_PEPPER ?? DEFAULT_FINGERPRINT_PEPPER).trim();
+
+export function validatePeppers(): void {
+  const usingDefaults =
+    TOKEN_PEPPER === DEFAULT_TOKEN_PEPPER || FINGERPRINT_PEPPER === DEFAULT_FINGERPRINT_PEPPER;
+  const hasBlank = !TOKEN_PEPPER || !FINGERPRINT_PEPPER;
+  if (!usingDefaults && !hasBlank) return;
+
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[FATAL] TOKEN_PEPPER / FINGERPRINT_PEPPER must be set in production. Refusing to start."
+    );
+    process.exit(1);
+  }
+  console.warn("[WARN] TOKEN_PEPPER / FINGERPRINT_PEPPER are using insecure default values.");
+}
+
+/* ── CORS ── */
+export const CORS_ORIGINS: string[] = (process.env.CORS_ORIGIN ?? "http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/* ── Rate-limit ── */
+export const LOGIN_RATE_WINDOW_MS = readPositiveInt(process.env.LOGIN_RATE_WINDOW_MIN, 15) * 60_000;
+export const LOGIN_RATE_MAX = readPositiveInt(process.env.LOGIN_RATE_MAX, 10);
+export const REGISTER_RATE_WINDOW_MS = readPositiveInt(process.env.REGISTER_RATE_WINDOW_MIN, 60) * 60_000;
+export const REGISTER_RATE_MAX = readPositiveInt(process.env.REGISTER_RATE_MAX, 5);

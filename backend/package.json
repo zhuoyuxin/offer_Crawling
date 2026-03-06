@@ -9,10 +9,11 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.3.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
