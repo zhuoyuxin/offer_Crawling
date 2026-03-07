@@ -39,7 +39,7 @@ interface FormState {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
 }
 
 function toFormState(record?: ApplicationRecord): FormState {

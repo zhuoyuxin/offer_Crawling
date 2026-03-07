@@ -9,6 +9,7 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any
@@ -667,7 +668,7 @@ def parse_page_records(raw_response: str, page: int) -> list[dict[str, str]]:
         return []
 
     soup = BeautifulSoup(html, "lxml")
-    crawled_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    crawled_at = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds")
     table_records = parse_table_records(soup, page, crawled_at)
     if table_records:
         return table_records
@@ -848,8 +849,8 @@ def open_database(db_path: Path) -> sqlite3.Connection:
             company_size TEXT NOT NULL DEFAULT '',
             source_page TEXT NOT NULL DEFAULT '',
             crawled_at TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours'))
         )
         """
     )
@@ -907,7 +908,7 @@ def save_records_to_db(records: list[dict[str, str]], conn: sqlite3.Connection) 
             crawled_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+8 hours'))
         ON CONFLICT(data_id) DO UPDATE SET
             data_id=excluded.data_id,
             title=excluded.title,
@@ -925,7 +926,7 @@ def save_records_to_db(records: list[dict[str, str]], conn: sqlite3.Connection) 
             company_size=excluded.company_size,
             source_page=excluded.source_page,
             crawled_at=excluded.crawled_at,
-            updated_at=datetime('now')
+            updated_at=datetime('now', '+8 hours')
     """
     valid_rows = [row for row in (normalize_record_for_db(item) for item in records) if row]
     skipped = len(records) - len(valid_rows)

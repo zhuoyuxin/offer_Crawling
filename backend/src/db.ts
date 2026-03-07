@@ -84,8 +84,8 @@ function ensureJobsSchema(db: Database.Database): void {
       company_size TEXT NOT NULL DEFAULT '',
       source_page TEXT NOT NULL DEFAULT '',
       crawled_at TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_jobs_company_position ON jobs(company_name, position);
@@ -139,8 +139,8 @@ function ensureUsersSchema(db: Database.Database): void {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN (${USER_ROLES.map((role) => `'${escapeSqlText(role)}'`).join(", ")})) DEFAULT 'user',
       status TEXT NOT NULL CHECK(status IN ('active', 'disabled')) DEFAULT 'active',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
       last_login_at TEXT NULL
     );
 
@@ -159,7 +159,7 @@ function ensureSessionsSchema(db: Database.Database): void {
       last_seen_at TEXT NOT NULL,
       revoked_at TEXT NULL,
       revoked_reason TEXT NULL CHECK(revoked_reason IN ('NEW_LOGIN', 'LOGOUT', 'FINGERPRINT_MISMATCH', 'ADMIN_FORCE_LOGOUT', 'EXPIRED')),
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -184,8 +184,8 @@ function createApplicationsTable(db: Database.Database): void {
       channel TEXT NOT NULL DEFAULT '',
       contact TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -285,7 +285,7 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       @company_size,
       @source_page,
       @crawled_at,
-      datetime('now')
+      datetime('now', '+8 hours')
     )
     ON CONFLICT(data_id) DO UPDATE SET
       post_id=excluded.post_id,
@@ -305,7 +305,7 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       company_size=excluded.company_size,
       source_page=excluded.source_page,
       crawled_at=excluded.crawled_at,
-      updated_at=datetime('now')
+      updated_at=datetime('now', '+8 hours')
   `);
 
   let imported = 0;

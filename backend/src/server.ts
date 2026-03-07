@@ -24,7 +24,7 @@ import { sendError } from "./http";
 import { requireAuth } from "./middleware/auth";
 import { requireRole } from "./middleware/requireRole";
 import { loginLimiter, registerLimiter } from "./middleware/rateLimit";
-import { addSeconds, toSqliteDateTime } from "./time";
+import { addSeconds, todayDateCST, toSqliteDateTime } from "./time";
 import type {
   AdminUserListItem,
   ApplicationRecord,
@@ -157,7 +157,7 @@ function buildPagination<T>(
 }
 
 function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateCST();
 }
 
 const emptyToUndefined = (input: unknown): unknown => {

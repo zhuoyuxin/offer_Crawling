@@ -1,9 +1,30 @@
+const TZ = "Asia/Shanghai";
+
+function formatInTz(date: Date): string {
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
 export function toSqliteDateTime(date: Date): string {
-  return date.toISOString().slice(0, 19).replace("T", " ");
+  return formatInTz(date);
 }
 
 export function nowSqliteDateTime(): string {
   return toSqliteDateTime(new Date());
+}
+
+export function todayDateCST(): string {
+  return formatInTz(new Date()).slice(0, 10);
 }
 
 export function addSeconds(date: Date, seconds: number): Date {
@@ -11,7 +32,15 @@ export function addSeconds(date: Date, seconds: number): Date {
 }
 
 export function parseSqliteDateTime(value: string): Date {
-  return new Date(value.replace(" ", "T") + "Z");
+  const offsetMs = getTimezoneOffsetMs(value);
+  return new Date(new Date(value.replace(" ", "T")).getTime() - offsetMs);
+}
+
+function getTimezoneOffsetMs(dateStr: string): number {
+  const utcDate = new Date(dateStr.replace(" ", "T") + "Z");
+  const cstStr = formatInTz(utcDate);
+  const cstAsUtc = new Date(cstStr.replace(" ", "T") + "Z");
+  return cstAsUtc.getTime() - utcDate.getTime();
 }
 
 export function isExpired(expiresAt: string, now: Date): boolean {
