@@ -117,6 +117,11 @@ export async function fetchMe(): Promise<AuthUser> {
 
 export async function fetchJobs(params: {
   q?: string;
+  companyName?: string;
+  companyType?: string;
+  recruitmentType?: string;
+  targetCandidates?: string;
+  location?: string;
   status?: string;
   page?: number;
   pageSize?: number;

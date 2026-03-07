@@ -382,6 +382,11 @@ app.get("/api/jobs", requireAuth, (req, res) => {
   const user = req.auth!.user;
   const { page, pageSize } = parsePage(req);
   const q = normalizeText(req.query.q);
+  const companyName = normalizeText(req.query.companyName);
+  const companyType = normalizeText(req.query.companyType);
+  const recruitmentType = normalizeText(req.query.recruitmentType);
+  const targetCandidates = normalizeText(req.query.targetCandidates);
+  const location = normalizeText(req.query.location);
   const status = normalizeText(req.query.status);
 
   if (status && status !== "全部" && !isStatus(status)) {
@@ -399,6 +404,26 @@ app.get("/api/jobs", requireAuth, (req, res) => {
       "(j.company_name LIKE @kw OR j.position LIKE @kw OR j.location LIKE @kw OR j.title LIKE @kw)"
     );
     params.kw = `%${q}%`;
+  }
+  if (companyName) {
+    filters.push("j.company_name LIKE @f_company_name");
+    params.f_company_name = `%${companyName}%`;
+  }
+  if (companyType) {
+    filters.push("j.company_type LIKE @f_company_type");
+    params.f_company_type = `%${companyType}%`;
+  }
+  if (recruitmentType) {
+    filters.push("j.recruitment_type LIKE @f_recruitment_type");
+    params.f_recruitment_type = `%${recruitmentType}%`;
+  }
+  if (targetCandidates) {
+    filters.push("j.target_candidates LIKE @f_target_candidates");
+    params.f_target_candidates = `%${targetCandidates}%`;
+  }
+  if (location) {
+    filters.push("j.location LIKE @f_location");
+    params.f_location = `%${location}%`;
   }
 
   if (status && status !== "全部") {

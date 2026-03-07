@@ -185,8 +185,22 @@ export function JobsPage() {
   const { user } = useAuth();
   const isNormalUser = user?.role === "user";
 
-  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState({
+    companyName: "",
+    companyType: "",
+    recruitmentType: "",
+    targetCandidates: "",
+    location: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    companyName: "",
+    companyType: "",
+    recruitmentType: "",
+    targetCandidates: "",
+    location: "",
+  });
   const [status, setStatus] = useState<(typeof FILTER_OPTIONS)[number]>("全部");
+  const [appliedStatus, setAppliedStatus] = useState<(typeof FILTER_OPTIONS)[number]>("全部");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -233,6 +247,12 @@ export function JobsPage() {
   const visibleColumns = ALL_COLUMNS.filter((c) => visibleKeys.has(c.key));
   const colSpan = visibleColumns.length + 1;
 
+  function handleSearch() {
+    setPage(1);
+    setAppliedFilters({ ...filters });
+    setAppliedStatus(status);
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function run() {
@@ -240,8 +260,12 @@ export function JobsPage() {
       setError("");
       try {
         const data = await fetchJobs({
-          q,
-          status,
+          companyName: appliedFilters.companyName,
+          companyType: appliedFilters.companyType,
+          recruitmentType: appliedFilters.recruitmentType,
+          targetCandidates: appliedFilters.targetCandidates,
+          location: appliedFilters.location,
+          status: appliedStatus,
           page: isNormalUser ? 1 : page,
           pageSize: PAGE_SIZE,
         });
@@ -269,7 +293,7 @@ export function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [q, status, page, isNormalUser, refreshToken]);
+  }, [appliedFilters, appliedStatus, page, isNormalUser, refreshToken]);
 
   async function handleApply(item: JobListItem) {
     setActiveAction({ postId: item.postId, type: "apply" });
@@ -320,23 +344,51 @@ export function JobsPage() {
       {/* toolbar */}
       <div className="rounded-2xl border border-black/5 bg-white/75 p-5 shadow-sm backdrop-blur-sm">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <label className="mb-1 block text-xs text-muted-foreground">搜索（公司 / 岗位 / 地点）</label>
+          <div className="min-w-[150px] flex-1">
+            <label className="mb-1 block text-xs text-muted-foreground">公司名称</label>
             <Input
-              value={q}
-              onChange={(event) => {
-                setPage(1);
-                setQ(event.target.value);
-              }}
-              placeholder="输入关键词"
+              value={filters.companyName}
+              onChange={(e) => { setFilters((f) => ({ ...f, companyName: e.target.value })); }}
+              placeholder="搜索公司"
             />
           </div>
-          <div className="w-[180px]">
+          <div className="w-[120px]">
+            <label className="mb-1 block text-xs text-muted-foreground">公司类型</label>
+            <Input
+              value={filters.companyType}
+              onChange={(e) => { setFilters((f) => ({ ...f, companyType: e.target.value })); }}
+              placeholder="如 银行"
+            />
+          </div>
+          <div className="w-[120px]">
+            <label className="mb-1 block text-xs text-muted-foreground">招聘类型</label>
+            <Input
+              value={filters.recruitmentType}
+              onChange={(e) => { setFilters((f) => ({ ...f, recruitmentType: e.target.value })); }}
+              placeholder="如 春招"
+            />
+          </div>
+          <div className="w-[120px]">
+            <label className="mb-1 block text-xs text-muted-foreground">招聘对象</label>
+            <Input
+              value={filters.targetCandidates}
+              onChange={(e) => { setFilters((f) => ({ ...f, targetCandidates: e.target.value })); }}
+              placeholder="如 2026届"
+            />
+          </div>
+          <div className="w-[120px]">
+            <label className="mb-1 block text-xs text-muted-foreground">工作地点</label>
+            <Input
+              value={filters.location}
+              onChange={(e) => { setFilters((f) => ({ ...f, location: e.target.value })); }}
+              placeholder="如 杭州"
+            />
+          </div>
+          <div className="w-[140px]">
             <label className="mb-1 block text-xs text-muted-foreground">状态筛选</label>
             <Select
               value={status}
               onChange={(event) => {
-                setPage(1);
                 setStatus(event.target.value as (typeof FILTER_OPTIONS)[number]);
               }}
             >
@@ -346,6 +398,12 @@ export function JobsPage() {
                 </option>
               ))}
             </Select>
+          </div>
+          <div className="w-[96px]">
+            <label className="mb-1 block text-xs text-transparent">搜索</label>
+            <Button type="button" className="w-full" onClick={handleSearch}>
+              搜索
+            </Button>
           </div>
         </div>
       </div>
