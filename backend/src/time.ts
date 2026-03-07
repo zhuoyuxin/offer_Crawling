@@ -32,15 +32,7 @@ export function addSeconds(date: Date, seconds: number): Date {
 }
 
 export function parseSqliteDateTime(value: string): Date {
-  const offsetMs = getTimezoneOffsetMs(value);
-  return new Date(new Date(value.replace(" ", "T")).getTime() - offsetMs);
-}
-
-function getTimezoneOffsetMs(dateStr: string): number {
-  const utcDate = new Date(dateStr.replace(" ", "T") + "Z");
-  const cstStr = formatInTz(utcDate);
-  const cstAsUtc = new Date(cstStr.replace(" ", "T") + "Z");
-  return cstAsUtc.getTime() - utcDate.getTime();
+  return new Date(value.replace(" ", "T") + "+08:00");
 }
 
 export function isExpired(expiresAt: string, now: Date): boolean {
