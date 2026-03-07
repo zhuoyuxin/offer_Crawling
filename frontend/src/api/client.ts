@@ -115,6 +115,36 @@ export async function fetchMe(): Promise<AuthUser> {
   return request<AuthUser>("/api/auth/me");
 }
 
+export interface JobFilterOptions {
+  companyTypes: string[];
+  recruitmentTypes: string[];
+}
+
+const FILTER_CACHE_KEY = "jobs-filter-options";
+const FILTER_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+interface CachedFilters {
+  data: JobFilterOptions;
+  ts: number;
+}
+
+export async function fetchJobFilters(): Promise<JobFilterOptions> {
+  try {
+    const raw = localStorage.getItem(FILTER_CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw) as CachedFilters;
+      if (Date.now() - cached.ts < FILTER_CACHE_TTL) {
+        return cached.data;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  const data = await request<JobFilterOptions>("/api/jobs/filters");
+  localStorage.setItem(FILTER_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+  return data;
+}
+
 export async function fetchJobs(params: {
   q?: string;
   companyName?: string;

@@ -378,6 +378,22 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   res.json(toPublicUser(req.auth!.user));
 });
 
+app.get("/api/jobs/filters", requireAuth, (_req, res) => {
+  const companyTypes = (
+    db
+      .prepare("SELECT DISTINCT company_type FROM jobs WHERE company_type <> '' ORDER BY company_type")
+      .all() as Array<{ company_type: string }>
+  ).map((r) => r.company_type);
+
+  const recruitmentTypes = (
+    db
+      .prepare("SELECT DISTINCT recruitment_type FROM jobs WHERE recruitment_type <> '' ORDER BY recruitment_type")
+      .all() as Array<{ recruitment_type: string }>
+  ).map((r) => r.recruitment_type);
+
+  res.json({ companyTypes, recruitmentTypes });
+});
+
 app.get("/api/jobs", requireAuth, (req, res) => {
   const user = req.auth!.user;
   const { page, pageSize } = parsePage(req);
@@ -410,12 +426,12 @@ app.get("/api/jobs", requireAuth, (req, res) => {
     params.f_company_name = `%${companyName}%`;
   }
   if (companyType) {
-    filters.push("j.company_type LIKE @f_company_type");
-    params.f_company_type = `%${companyType}%`;
+    filters.push("j.company_type = @f_company_type");
+    params.f_company_type = companyType;
   }
   if (recruitmentType) {
-    filters.push("j.recruitment_type LIKE @f_recruitment_type");
-    params.f_recruitment_type = `%${recruitmentType}%`;
+    filters.push("j.recruitment_type = @f_recruitment_type");
+    params.f_recruitment_type = recruitmentType;
   }
   if (targetCandidates) {
     filters.push("j.target_candidates LIKE @f_target_candidates");

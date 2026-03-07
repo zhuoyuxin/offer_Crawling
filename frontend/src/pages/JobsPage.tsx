@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { applyJob, createApplication, fetchJobs, getStatusColor } from "@/api/client";
+import { applyJob, createApplication, fetchJobFilters, fetchJobs, getStatusColor, type JobFilterOptions } from "@/api/client";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -201,6 +201,7 @@ export function JobsPage() {
   });
   const [status, setStatus] = useState<(typeof FILTER_OPTIONS)[number]>("全部");
   const [appliedStatus, setAppliedStatus] = useState<(typeof FILTER_OPTIONS)[number]>("全部");
+  const [filterOptions, setFilterOptions] = useState<JobFilterOptions>({ companyTypes: [], recruitmentTypes: [] });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -220,6 +221,10 @@ export function JobsPage() {
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(loadVisibleColumns);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void fetchJobFilters().then(setFilterOptions).catch(() => {/* ignore */});
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -354,19 +359,27 @@ export function JobsPage() {
           </div>
           <div className="w-[120px]">
             <label className="mb-1 block text-xs text-muted-foreground">公司类型</label>
-            <Input
+            <Select
               value={filters.companyType}
               onChange={(e) => { setFilters((f) => ({ ...f, companyType: e.target.value })); }}
-              placeholder="如 银行"
-            />
+            >
+              <option value="">全部</option>
+              {filterOptions.companyTypes.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </Select>
           </div>
           <div className="w-[120px]">
             <label className="mb-1 block text-xs text-muted-foreground">招聘类型</label>
-            <Input
+            <Select
               value={filters.recruitmentType}
               onChange={(e) => { setFilters((f) => ({ ...f, recruitmentType: e.target.value })); }}
-              placeholder="如 春招"
-            />
+            >
+              <option value="">全部</option>
+              {filterOptions.recruitmentTypes.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </Select>
           </div>
           <div className="w-[120px]">
             <label className="mb-1 block text-xs text-muted-foreground">招聘对象</label>
