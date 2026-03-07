@@ -84,7 +84,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--head-file", default="head.txt", help="请求模板文件路径")
     parser.add_argument("--db-path", default="data/jobs.db", help="SQLite 文件路径，默认 data/jobs.db")
-    parser.add_argument("--recruitment-type", default="春招", help="请求参数 recruitment_type，默认 春招")
+    parser.add_argument("--recruitment-type", default="", help="请求参数 recruitment_type，默认 ")
     parser.add_argument("--max-pages", type=int, default=None, help="最大抓取页数（可选）")
     parser.add_argument("--start-page", type=int, default=1, help="start page, default 1")
     parser.add_argument(
@@ -448,6 +448,7 @@ def parse_job_record(node: Tag, source_page: int, crawled_at: str) -> dict[str, 
         "data_id": data_id,
         "title": title,
         "company_name": company_name,
+        "company_type": "",
         "location": location,
         "recruitment_type": recruitment_type,
         "target_candidates": target_candidates,
@@ -456,6 +457,8 @@ def parse_job_record(node: Tag, source_page: int, crawled_at: str) -> dict[str, 
         "deadline": deadline,
         "update_time": update_time,
         "detail_url": detail_url,
+        "notice_url": "",
+        "company_size": "",
         "source_page": str(source_page),
         "crawled_at": crawled_at,
     }
@@ -569,30 +572,39 @@ def parse_table_records(soup: BeautifulSoup, page: int, crawled_at: str) -> list
             text = normalize_text(anchor.get_text(" ", strip=True))
             all_links.append((href, text))
 
-        detail_url = ""
-        notice_url = ""
-        apply_url = ""
+        # 投递链接：crt-col-links 内的 .crt-link（排除 .crt-notice-link）
+        apply_anchor = row.select_one(".crt-col-links a.crt-link:not(.crt-notice-link)")
+        detail_url = absolute_url(apply_anchor["href"]) if apply_anchor and apply_anchor.has_attr("href") else ""
 
-        for href, text in all_links:
-            lower_text = text.lower()
-            if not notice_url and ("公告" in text or "notice" in lower_text):
-                notice_url = href
-            if not apply_url and ("投递" in text or "申请" in text or "apply" in lower_text):
-                apply_url = href
-            if not detail_url and extract_post_id(href):
-                detail_url = href
+        # 招聘公告：crt-col-notice 内的 .crt-notice-link
+        notice_anchor = row.select_one(".crt-col-notice a.crt-notice-link")
+        notice_url = absolute_url(notice_anchor["href"]) if notice_anchor and notice_anchor.has_attr("href") else ""
 
+        # fallback: 如果 CSS class 没匹配到，从所有链接里按文本兜底
         if not detail_url:
-            detail_url = notice_url or apply_url or (all_links[0][0] if all_links else "")
+            for href, text in all_links:
+                if extract_post_id(href):
+                    detail_url = href
+                    break
+        if not detail_url:
+            for href, text in all_links:
+                lower_text = text.lower()
+                if "投递" in text or "申请" in text or "apply" in lower_text:
+                    detail_url = href
+                    break
+        if not detail_url and all_links:
+            detail_url = all_links[0][0]
 
         company_name = pick_row_field(row, cell_texts, ["crt-col-company", "crt-col-company-name"], 0)
-        recruitment_type = pick_row_field(row, cell_texts, ["crt-col-recruitment-type", "crt-col-type"], 3)
+        company_type = pick_row_field(row, cell_texts, ["crt-col-type"], 1)
+        recruitment_type = pick_row_field(row, cell_texts, ["crt-col-recruitment-type"], 3)
         target_candidates = pick_row_field(row, cell_texts, ["crt-col-target-candidates", "crt-col-target"], 4)
         location = pick_row_field(row, cell_texts, ["crt-col-location"], 5)
         position = pick_row_field(row, cell_texts, ["crt-col-position"], 6)
         progress_status = pick_row_field(row, cell_texts, ["crt-col-status", "crt-col-progress-status"], 7)
+        update_time = pick_row_field(row, cell_texts, ["crt-col-update-time", "crt-col-modified-time"], 8)
         deadline = pick_row_field(row, cell_texts, ["crt-col-deadline"], 9)
-        update_time = pick_row_field(row, cell_texts, ["crt-col-update-time", "crt-col-modified-time"], 10)
+        company_size = pick_row_field(row, cell_texts, ["crt-col-company-size"], 13)
         title = position or company_name
 
         data_id = extract_data_id_from_node(row)
@@ -605,6 +617,7 @@ def parse_table_records(soup: BeautifulSoup, page: int, crawled_at: str) -> list
             "data_id": data_id,
             "title": title,
             "company_name": company_name,
+            "company_type": company_type,
             "location": location,
             "recruitment_type": recruitment_type,
             "target_candidates": target_candidates,
@@ -613,6 +626,8 @@ def parse_table_records(soup: BeautifulSoup, page: int, crawled_at: str) -> list
             "deadline": deadline,
             "update_time": update_time,
             "detail_url": detail_url,
+            "notice_url": notice_url,
+            "company_size": company_size,
             "source_page": str(page),
             "crawled_at": crawled_at,
         }
@@ -775,6 +790,7 @@ JOB_COLUMNS = [
     "data_id",
     "title",
     "company_name",
+    "company_type",
     "location",
     "recruitment_type",
     "target_candidates",
@@ -783,6 +799,8 @@ JOB_COLUMNS = [
     "deadline",
     "update_time",
     "detail_url",
+    "notice_url",
+    "company_size",
     "source_page",
     "crawled_at",
 ]
@@ -817,6 +835,7 @@ def open_database(db_path: Path) -> sqlite3.Connection:
             data_id TEXT NOT NULL DEFAULT '',
             title TEXT NOT NULL DEFAULT '',
             company_name TEXT NOT NULL DEFAULT '',
+            company_type TEXT NOT NULL DEFAULT '',
             location TEXT NOT NULL DEFAULT '',
             recruitment_type TEXT NOT NULL DEFAULT '',
             target_candidates TEXT NOT NULL DEFAULT '',
@@ -825,6 +844,8 @@ def open_database(db_path: Path) -> sqlite3.Connection:
             deadline TEXT NOT NULL DEFAULT '',
             update_time TEXT NOT NULL DEFAULT '',
             detail_url TEXT NOT NULL DEFAULT '',
+            notice_url TEXT NOT NULL DEFAULT '',
+            company_size TEXT NOT NULL DEFAULT '',
             source_page TEXT NOT NULL DEFAULT '',
             crawled_at TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -834,6 +855,18 @@ def open_database(db_path: Path) -> sqlite3.Connection:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_company_position ON jobs(company_name, position)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_update_time ON jobs(update_time)")
+
+    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    new_columns = [
+        ("company_type", "TEXT NOT NULL DEFAULT ''"),
+        ("notice_url", "TEXT NOT NULL DEFAULT ''"),
+        ("company_size", "TEXT NOT NULL DEFAULT ''"),
+    ]
+    for col_name, col_def in new_columns:
+        if col_name not in existing_columns:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col_name} {col_def}")
+            logging.info("已为 jobs 表新增列：%s", col_name)
+
     ensure_data_id_uniqueness(conn)
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_data_id_unique ON jobs(data_id)")
     return conn
@@ -859,6 +892,7 @@ def save_records_to_db(records: list[dict[str, str]], conn: sqlite3.Connection) 
             data_id,
             title,
             company_name,
+            company_type,
             location,
             recruitment_type,
             target_candidates,
@@ -867,15 +901,18 @@ def save_records_to_db(records: list[dict[str, str]], conn: sqlite3.Connection) 
             deadline,
             update_time,
             detail_url,
+            notice_url,
+            company_size,
             source_page,
             crawled_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(data_id) DO UPDATE SET
             data_id=excluded.data_id,
             title=excluded.title,
             company_name=excluded.company_name,
+            company_type=excluded.company_type,
             location=excluded.location,
             recruitment_type=excluded.recruitment_type,
             target_candidates=excluded.target_candidates,
@@ -884,6 +921,8 @@ def save_records_to_db(records: list[dict[str, str]], conn: sqlite3.Connection) 
             deadline=excluded.deadline,
             update_time=excluded.update_time,
             detail_url=excluded.detail_url,
+            notice_url=excluded.notice_url,
+            company_size=excluded.company_size,
             source_page=excluded.source_page,
             crawled_at=excluded.crawled_at,
             updated_at=datetime('now')

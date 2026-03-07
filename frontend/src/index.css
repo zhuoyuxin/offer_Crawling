@@ -37,3 +37,22 @@ h2,
 h3 {
   font-family: "ZCOOL XiaoWei", serif;
 }
+
+/* thin warm scrollbar for data tables */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(30 20% 78%) transparent;
+}
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: hsl(30 20% 82%);
+  border-radius: 3px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: hsl(30 20% 72%);
+}

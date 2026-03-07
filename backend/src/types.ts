@@ -5,6 +5,7 @@ export interface JobListItem {
   dataId: string;
   title: string;
   companyName: string;
+  companyType: string;
   location: string;
   recruitmentType: string;
   targetCandidates: string;
@@ -13,6 +14,8 @@ export interface JobListItem {
   deadline: string;
   updateTime: string;
   detailUrl: string;
+  noticeUrl: string;
+  companySize: string;
   sourcePage: string;
   crawledAt: string;
   applicationId: number | null;

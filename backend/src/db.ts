@@ -15,6 +15,7 @@ const JOB_COLUMNS = [
   "data_id",
   "title",
   "company_name",
+  "company_type",
   "location",
   "recruitment_type",
   "target_candidates",
@@ -23,6 +24,8 @@ const JOB_COLUMNS = [
   "deadline",
   "update_time",
   "detail_url",
+  "notice_url",
+  "company_size",
   "source_page",
   "crawled_at",
 ] as const;
@@ -68,6 +71,7 @@ function ensureJobsSchema(db: Database.Database): void {
       data_id TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL DEFAULT '',
       company_name TEXT NOT NULL DEFAULT '',
+      company_type TEXT NOT NULL DEFAULT '',
       location TEXT NOT NULL DEFAULT '',
       recruitment_type TEXT NOT NULL DEFAULT '',
       target_candidates TEXT NOT NULL DEFAULT '',
@@ -76,6 +80,8 @@ function ensureJobsSchema(db: Database.Database): void {
       deadline TEXT NOT NULL DEFAULT '',
       update_time TEXT NOT NULL DEFAULT '',
       detail_url TEXT NOT NULL DEFAULT '',
+      notice_url TEXT NOT NULL DEFAULT '',
+      company_size TEXT NOT NULL DEFAULT '',
       source_page TEXT NOT NULL DEFAULT '',
       crawled_at TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -85,6 +91,21 @@ function ensureJobsSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_jobs_company_position ON jobs(company_name, position);
     CREATE INDEX IF NOT EXISTS idx_jobs_update_time ON jobs(update_time);
   `);
+
+  const newColumns: Array<[string, string]> = [
+    ["company_type", "TEXT NOT NULL DEFAULT ''"],
+    ["notice_url", "TEXT NOT NULL DEFAULT ''"],
+    ["company_size", "TEXT NOT NULL DEFAULT ''"],
+  ];
+  const existingCols = new Set(
+    (db.pragma("table_info('jobs')") as Array<{ name: string }>).map((c) => c.name)
+  );
+  for (const [colName, colDef] of newColumns) {
+    if (!existingCols.has(colName)) {
+      db.exec(`ALTER TABLE jobs ADD COLUMN ${colName} ${colDef}`);
+      console.log(`[info] 已为 jobs 表新增列: ${colName}`);
+    }
+  }
 
   const duplicate = db
     .prepare(
@@ -231,6 +252,7 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       data_id,
       title,
       company_name,
+      company_type,
       location,
       recruitment_type,
       target_candidates,
@@ -239,6 +261,8 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       deadline,
       update_time,
       detail_url,
+      notice_url,
+      company_size,
       source_page,
       crawled_at,
       updated_at
@@ -248,6 +272,7 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       @data_id,
       @title,
       @company_name,
+      @company_type,
       @location,
       @recruitment_type,
       @target_candidates,
@@ -256,6 +281,8 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       @deadline,
       @update_time,
       @detail_url,
+      @notice_url,
+      @company_size,
       @source_page,
       @crawled_at,
       datetime('now')
@@ -265,6 +292,7 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       data_id=excluded.data_id,
       title=excluded.title,
       company_name=excluded.company_name,
+      company_type=excluded.company_type,
       location=excluded.location,
       recruitment_type=excluded.recruitment_type,
       target_candidates=excluded.target_candidates,
@@ -273,6 +301,8 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
       deadline=excluded.deadline,
       update_time=excluded.update_time,
       detail_url=excluded.detail_url,
+      notice_url=excluded.notice_url,
+      company_size=excluded.company_size,
       source_page=excluded.source_page,
       crawled_at=excluded.crawled_at,
       updated_at=datetime('now')
@@ -291,6 +321,7 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
         data_id: dataId,
         title: toRecordValue(item, "title"),
         company_name: toRecordValue(item, "company_name"),
+        company_type: toRecordValue(item, "company_type"),
         location: toRecordValue(item, "location"),
         recruitment_type: toRecordValue(item, "recruitment_type"),
         target_candidates: toRecordValue(item, "target_candidates"),
@@ -299,6 +330,8 @@ function importJobsFromJsonIfNeeded(db: Database.Database): void {
         deadline: toRecordValue(item, "deadline"),
         update_time: toRecordValue(item, "update_time"),
         detail_url: toRecordValue(item, "detail_url"),
+        notice_url: toRecordValue(item, "notice_url"),
+        company_size: toRecordValue(item, "company_size"),
         source_page: toRecordValue(item, "source_page"),
         crawled_at: toRecordValue(item, "crawled_at"),
       };

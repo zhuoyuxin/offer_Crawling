@@ -82,7 +82,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_0%_0%,rgba(248,210,160,.45),transparent_42%),radial-gradient(circle_at_100%_0%,rgba(255,240,221,.8),transparent_35%),linear-gradient(120deg,#fff8f0,#f6f2ec)]">
       <header className="border-b border-black/5 bg-white/70 backdrop-blur">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-6 py-4">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Job Tracker</p>
             <h1 className="text-xl font-semibold tracking-tight text-[#211b14]">职位与投递管理台</h1>
@@ -119,7 +119,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1200px] px-6 py-6">
+      <main className="mx-auto max-w-[1440px] px-6 py-6">
         <Routes>
           <Route
             path="/login"
